@@ -13,8 +13,8 @@ class GaussianPolicy(torch.jit.ScriptModule):
     def __init__(self, action_shape, num_sequences, feature_dim, hidden_units=(256, 256)):
         """
         param action_shape: 动作空间维度
-        param num_sequences: 序列长度 todo
-        param feature_dim: 特征维度
+        param num_sequences: 序列长度 这里的序列长度就是SlacObservation中的环境序列长度，表明总共采集了多少个特征用于训练
+        param feature_dim: 特征维度，就是观察经过特征提取后的维度
         param hidden_units: 隐藏层单元数 用于构建决定动作均值和方差的MLP层数
         """
         super(GaussianPolicy, self).__init__()
@@ -35,7 +35,12 @@ class GaussianPolicy(torch.jit.ScriptModule):
 
     @torch.jit.script_method
     def sample(self, feature_action):
+        '''
+        param feature_action: 传入观察特征_动作组合 （到当前观察执行的动作)
+        得到预测的动作均值和方差（经过缩放到合理范围）
+        '''
         mean, log_std = torch.chunk(self.net(feature_action), 2, dim=-1)
+        # 这里对预测的动作添加噪声，同时限制了动作的取值范围到合理的范围
         action, log_pi = reparameterize(mean, log_std.clamp(-20, 2))
         return action, log_pi
 

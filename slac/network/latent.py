@@ -35,6 +35,7 @@ class Gaussian(torch.jit.ScriptModule):
 
     def __init__(self, input_dim, output_dim, hidden_units=(256, 256)):
         super(Gaussian, self).__init__()
+        # 构建mlp层
         self.net = build_mlp(
             input_dim=input_dim,
             output_dim=2 * output_dim,
@@ -45,11 +46,14 @@ class Gaussian(torch.jit.ScriptModule):
     @torch.jit.script_method
     def forward(self, x):
         if x.ndim == 3:
+            # todo 为什么维度会是3
             B, S, _ = x.size()
             x = self.net(x.view(B * S, _)).view(B, S, -1)
         else:
             x = self.net(x)
+        # 将预测的x分为均值和标准差
         mean, std = torch.chunk(x, 2, dim=-1)
+        # 这里是为了防止标准差为0，保持为大于0 todo
         std = F.softplus(std) + 1e-5
         return mean, std
 
@@ -57,6 +61,7 @@ class Gaussian(torch.jit.ScriptModule):
 class Decoder(torch.jit.ScriptModule):
     """
     Decoder.
+    这里应该是环境特征解码器
     """
 
     def __init__(self, input_dim=288, output_dim=3, std=1.0):
@@ -94,6 +99,7 @@ class Decoder(torch.jit.ScriptModule):
 class Encoder(torch.jit.ScriptModule):
     """
     Encoder.
+    从这里来看，这里应该是环境特征采集器
     """
 
     def __init__(self, input_dim=3, output_dim=256):
@@ -134,36 +140,36 @@ class LatentModel(torch.jit.ScriptModule):
 
     def __init__(
         self,
-        state_shape,
-        action_shape,
-        feature_dim=256,
-        z1_dim=32,
-        z2_dim=256,
-        hidden_units=(256, 256),
+        state_shape, # 观察空间shape
+        action_shape, # 动作空间shape
+        feature_dim=256, # 特征维度
+        z1_dim=32, # z1的维度
+        z2_dim=256, # z2的维度
+        hidden_units=(256, 256), # 隐藏层单元数
     ):
         super(LatentModel, self).__init__()
-        # p(z1(0)) = N(0, I)
+        # p(z1(0)) = N(0, I) todo 作用 得到的是一个固定的均值和方差
         self.z1_prior_init = FixedGaussian(z1_dim, 1.0)
-        # p(z2(0) | z1(0))
+        # p(z2(0) | z1(0)) todo 作用 得到的是一个预测的均值和方差
         self.z2_prior_init = Gaussian(z1_dim, z2_dim, hidden_units)
-        # p(z1(t+1) | z2(t), a(t))
+        # p(z1(t+1) | z2(t), a(t)) todo 作用 预测的也是均值和方差
         self.z1_prior = Gaussian(
             z2_dim + action_shape[0],
             z1_dim,
             hidden_units,
         )
-        # p(z2(t+1) | z1(t+1), z2(t), a(t))
+        # p(z2(t+1) | z1(t+1), z2(t), a(t)) todo 作用 预测的也是均值和方差
         self.z2_prior = Gaussian(
             z1_dim + z2_dim + action_shape[0],
             z2_dim,
             hidden_units,
         )
 
-        # q(z1(0) | feat(0))
+        # q(z1(0) | feat(0)) todo 作用
         self.z1_posterior_init = Gaussian(feature_dim, z1_dim, hidden_units)
         # q(z2(0) | z1(0)) = p(z2(0) | z1(0))
         self.z2_posterior_init = self.z2_prior_init
-        # q(z1(t+1) | feat(t+1), z2(t), a(t))
+        # q(z1(t+1) | feat(t+1), z2(t), a(t)) # todo
         self.z1_posterior = Gaussian(
             feature_dim + z2_dim + action_shape[0],
             z1_dim,
@@ -172,7 +178,8 @@ class LatentModel(torch.jit.ScriptModule):
         # q(z2(t+1) | z1(t+1), z2(t), a(t)) = p(z2(t+1) | z1(t+1), z2(t), a(t))
         self.z2_posterior = self.z2_prior
 
-        # p(r(t) | z1(t), z2(t), a(t), z1(t+1), z2(t+1))
+        # p(r(t) | z1(t), z2(t), a(t), z1(t+1), z2(t+1)) 
+        # todo 作用
         self.reward = Gaussian(
             2 * z1_dim + 2 * z2_dim + action_shape[0],
             1,

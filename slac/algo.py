@@ -49,26 +49,30 @@ class SlacAlgorithm:
         # 这里应该是sac的评价网络模型
         self.critic = TwinnedQNetwork(action_shape, z1_dim, z2_dim, hidden_units).to(device)
         self.critic_target = TwinnedQNetwork(action_shape, z1_dim, z2_dim, hidden_units).to(device)
-        # 这里是潜在模型，应该就是slac的特有
+        # 这里是潜在模型，应该就是slac的特有，环境特征的采集和解码应该就是这里进行吧 todo
         self.latent = LatentModel(state_shape, action_shape, feature_dim, z1_dim, z2_dim, hidden_units).to(device)
+        # 将self.critic的参数完全拷贝到self.critic_target
         soft_update(self.critic_target, self.critic, 1.0)
+        # 设置目标网络的参数不需要更新 梯度设置为false
         grad_false(self.critic_target)
 
-        # Target entropy is -|A|.
+        # Target entropy is -|A|. 目标熵 todo为什么是这么算目标熵
         self.target_entropy = -float(action_shape[0])
-        # We optimize log(alpha) because alpha is always bigger than 0.
+        # We optimize log(alpha) because alpha is always bigger than 0. 
+        # todo 作用，设置为0.0
         self.log_alpha = torch.zeros(1, requires_grad=True, device=device)
         with torch.no_grad():
+            # 这里是干嘛todo
             self.alpha = self.log_alpha.exp()
 
-        # Optimizers.
+        # Optimizers. 创建优化器
         self.optim_actor = Adam(self.actor.parameters(), lr=lr_sac)
         self.optim_critic = Adam(self.critic.parameters(), lr=lr_sac)
         self.optim_alpha = Adam([self.log_alpha], lr=lr_sac)
         self.optim_latent = Adam(self.latent.parameters(), lr=lr_latent)
 
         self.learning_steps_sac = 0
-        self.learning_steps_latent = 0
+        self.learning_steps_latent = 0 # 潜在空间的训练次数，要保存
         self.state_shape = state_shape
         self.action_shape = action_shape
         self.action_repeat = action_repeat
@@ -79,22 +83,39 @@ class SlacAlgorithm:
         self.num_sequences = num_sequences
         self.tau = tau
 
-        # JIT compile to speed up.
+        # JIT compile to speed up. todo 作用
         fake_feature = torch.empty(1, num_sequences + 1, feature_dim, device=device)
         fake_action = torch.empty(1, num_sequences, action_shape[0], device=device)
+        # 通过跟踪模型的前向计算路径来生成 TorchScript，具体作用是？todo
         self.create_feature_actions = torch.jit.trace(create_feature_actions, (fake_feature, fake_action))
 
     def preprocess(self, ob):
+        '''
+        对环境进行预处理
+
+        ob.state 不是tensor，应该是numpy
+        由于ob时SlacObservation，所以.state拿到的是一个序列状态
+        '''
+        # 这里也进行了一次归一化，因为这里传入的不是缓冲区的数据
         state = torch.tensor(ob.state, dtype=torch.uint8, device=self.device).float().div_(255.0)
         with torch.no_grad():
+            # 对环境进行特征提取
             feature = self.latent.encoder(state).view(1, -1)
+        # 拿到每个观察对应的动作
         action = torch.tensor(ob.action, dtype=torch.float, device=self.device)
+        # 观察特征，动作
         feature_action = torch.cat([feature, action], dim=1)
         return feature_action
 
     def explore(self, ob):
+        '''
+        param ob: SlacObservation
+        根据环境观察得到动作
+        '''
+        # 预处理，得到（观察特征_动作） todo 这个动作是什么动作
         feature_action = self.preprocess(ob)
         with torch.no_grad():
+            # 根据特征得到预测的动作（添加了噪声）
             action = self.actor.sample(feature_action)[0]
         return action.cpu().numpy()[0]
 
@@ -105,19 +126,33 @@ class SlacAlgorithm:
         return action.cpu().numpy()[0]
 
     def step(self, env, ob, t, is_random):
+        '''
+        对环境进行一次动作执行
+
+        ob：这里传入的是SlacObservation
+        '''
         t += 1
 
+        # 得到待执行的动作
         if is_random:
             action = env.action_space.sample()
         else:
             action = self.explore(ob)
 
         state, reward, done, _ = env.step(action)
+        # 如果t到到了最大步数，则mask为False
+        # 否则mask为实际的done
         mask = False if t == env._max_episode_steps else done
         ob.append(state, action)
+        # 存储数据
         self.buffer.append(action, reward, mask, state, done)
 
         if done:
+            # 如果游戏结束，则
+            # 重置环境
+            # 重置SlacObservation观察
+            # 重置buff
+            # 在重置时，会将重置的观察保存到缓冲区中 注意
             t = 0
             state = env.reset()
             ob.reset_episode(state)
@@ -126,6 +161,9 @@ class SlacAlgorithm:
         return t
 
     def update_latent(self, writer):
+        '''
+        更新潜在空间模型
+        '''
         self.learning_steps_latent += 1
         state_, action_, reward_, done_ = self.buffer.sample_latent(self.batch_size_latent)
         loss_kld, loss_image, loss_reward = self.latent.calculate_loss(state_, action_, reward_, done_)

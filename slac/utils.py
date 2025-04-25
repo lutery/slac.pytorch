@@ -36,6 +36,14 @@ def build_mlp(
     hidden_activation=nn.Tanh(),
     output_activation=None,
 ):
+    '''
+    构建mlp层
+    :param input_dim: 输入维度
+    :param output_dim: 输出维度
+    :param hidden_units: 隐藏层单元数
+    :param hidden_activation: 隐藏层激活函数
+    :param output_activation: 输出层激活函数
+    '''
     layers = []
     units = input_dim
     for next_units in hidden_units:

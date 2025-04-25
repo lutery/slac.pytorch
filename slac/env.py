@@ -5,6 +5,11 @@ gym.logger.set_level(40)
 
 
 def make_dmc(domain_name, task_name, action_repeat, image_size=64):
+    '''
+    返回像素观察
+    限制观察尺寸
+    跳帧
+    '''
     env = dmc2gym.make(
         domain_name=domain_name,
         task_name=task_name,

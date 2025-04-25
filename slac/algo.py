@@ -18,23 +18,23 @@ class SlacAlgorithm:
 
     def __init__(
         self,
-        state_shape,
-        action_shape,
-        action_repeat,
-        device,
-        seed,
-        gamma=0.99,
-        batch_size_sac=256,
-        batch_size_latent=32,
-        buffer_size=10 ** 5,
-        num_sequences=8,
-        lr_sac=3e-4,
-        lr_latent=1e-4,
-        feature_dim=256,
-        z1_dim=32,
-        z2_dim=256,
-        hidden_units=(256, 256),
-        tau=5e-3,
+        state_shape, # 观察空间
+        action_shape, # 动作空间
+        action_repeat, # 动作重复次数
+        device, # 设备
+        seed, # 随机种子 
+        gamma=0.99, # 折扣因子
+        batch_size_sac=256, # SAC的批量大小
+        batch_size_latent=32, # Latent的批量大小
+        buffer_size=10 ** 5, # 缓冲区大小
+        num_sequences=8, # 序列长度
+        lr_sac=3e-4, # SAC的学习率
+        lr_latent=1e-4, # Latent的学习率
+        feature_dim=256, # 特征维度
+        z1_dim=32, # z1的维度 todo
+        z2_dim=256, # z2的维度 todo
+        hidden_units=(256, 256), # 隐藏层单元数 todo
+        tau=5e-3, # 软更新的参数
     ):
         np.random.seed(seed)
         torch.manual_seed(seed)
@@ -44,9 +44,12 @@ class SlacAlgorithm:
         self.buffer = ReplayBuffer(buffer_size, num_sequences, state_shape, action_shape, device)
 
         # Networks.
+        # 动作策略网络
         self.actor = GaussianPolicy(action_shape, num_sequences, feature_dim, hidden_units).to(device)
+        # 这里应该是sac的评价网络模型
         self.critic = TwinnedQNetwork(action_shape, z1_dim, z2_dim, hidden_units).to(device)
         self.critic_target = TwinnedQNetwork(action_shape, z1_dim, z2_dim, hidden_units).to(device)
+        # 这里是潜在模型，应该就是slac的特有
         self.latent = LatentModel(state_shape, action_shape, feature_dim, z1_dim, z2_dim, hidden_units).to(device)
         soft_update(self.critic_target, self.critic, 1.0)
         grad_false(self.critic_target)

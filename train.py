@@ -8,6 +8,9 @@ from slac.algo import SlacAlgorithm
 from slac.env import make_dmc
 from slac.trainer import Trainer
 
+'''
+python train.py --domain_name cheetah --task_name run --action_repeat 4 --seed 0 --cuda
+'''
 
 def main(args):
     env = make_dmc(

@@ -12,6 +12,7 @@ from slac.utils import build_mlp, calculate_kl_divergence
 class FixedGaussian(torch.jit.ScriptModule):
     """
     Fixed diagonal gaussian distribution.
+    todo 作用是啥？
     """
 
     def __init__(self, output_dim, std):
@@ -21,6 +22,7 @@ class FixedGaussian(torch.jit.ScriptModule):
 
     @torch.jit.script_method
     def forward(self, x):
+        # 这里构建的是一个均值（全0）和方差（全1）？todo
         mean = torch.zeros(x.size(0), self.output_dim, device=x.device)
         std = torch.ones(x.size(0), self.output_dim, device=x.device).mul_(self.std)
         return mean, std
@@ -127,6 +129,7 @@ class Encoder(torch.jit.ScriptModule):
 class LatentModel(torch.jit.ScriptModule):
     """
     Stochastic latent variable model to estimate latent dynamics and the reward.
+    构建的是一个潜在模型，todo 作用是啥？
     """
 
     def __init__(

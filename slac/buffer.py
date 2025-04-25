@@ -71,6 +71,10 @@ class SequenceBuffer:
 class ReplayBuffer:
     """
     Replay Buffer.
+    重放缓冲区
+    存储按顺序存储
+    采样随机不连续样本采样
+    对观察归一化到0~1
     """
 
     def __init__(self, buffer_size, num_sequences, state_shape, action_shape, device):
@@ -123,6 +127,7 @@ class ReplayBuffer:
     def sample_latent(self, batch_size):
         """
         Sample trajectories for updating latent variable model.
+        对于latent采样则没有多返回一个元素，是多少就是多少
         """
         idxes = np.random.randint(low=0, high=self._n, size=batch_size)
         state_ = np.empty((batch_size, self.num_sequences + 1, *self.state_shape), dtype=np.uint8)
@@ -134,6 +139,7 @@ class ReplayBuffer:
     def sample_sac(self, batch_size):
         """
         Sample trajectories for updating SAC.
+        对于sac训练则再奖励和结束标识多返回一个维度，标识-1
         """
         idxes = np.random.randint(low=0, high=self._n, size=batch_size)
         state_ = np.empty((batch_size, self.num_sequences + 1, *self.state_shape), dtype=np.uint8)

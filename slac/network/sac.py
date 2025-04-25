@@ -11,9 +11,16 @@ class GaussianPolicy(torch.jit.ScriptModule):
     """
 
     def __init__(self, action_shape, num_sequences, feature_dim, hidden_units=(256, 256)):
+        """
+        param action_shape: 动作空间维度
+        param num_sequences: 序列长度 todo
+        param feature_dim: 特征维度
+        param hidden_units: 隐藏层单元数 用于构建决定动作均值和方差的MLP层数
+        """
         super(GaussianPolicy, self).__init__()
 
         # NOTE: Conv layers are shared with the latent model.
+        # 这里的意思是说动作策略网络和潜在模型的卷积层是共享的，所以这里没有卷积特征提取器 ？ todo
         self.net = build_mlp(
             input_dim=num_sequences * feature_dim + (num_sequences - 1) * action_shape[0],
             output_dim=2 * action_shape[0],
@@ -36,17 +43,20 @@ class GaussianPolicy(torch.jit.ScriptModule):
 class TwinnedQNetwork(torch.jit.ScriptModule):
     """
     Twinned Q networks.
+    用于评价网络
     """
 
     def __init__(
         self,
-        action_shape,
-        z1_dim,
-        z2_dim,
-        hidden_units=(256, 256),
+        action_shape, # 动作空间维度
+        z1_dim, # z1的维度 todo
+        z2_dim, # z2的维度 todo
+        hidden_units=(256, 256), # 隐藏层单元数
     ):
         super(TwinnedQNetwork, self).__init__()
-
+        
+        # 构建了两个net，输入的是动作和z1和z2的特征
+        # 并进行了参数初始化
         self.net1 = build_mlp(
             input_dim=action_shape[0] + z1_dim + z2_dim,
             output_dim=1,

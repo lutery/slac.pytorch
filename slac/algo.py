@@ -57,6 +57,15 @@ class SlacAlgorithm:
         grad_false(self.critic_target)
 
         # Target entropy is -|A|. 目标熵 todo为什么是这么算目标熵
+        # 策略应该维持的目标熵水平
+        # -float(action_shape[0]) 是一个启发式设置：负的动作空间维度
+        # 例如，如果动作是 2 维的（如 x,y 方向的移动），则 target_entropy = -2.0
+        '''
+        为什么这样设置是合理的？
+        随动作维度缩放：更高维的动作空间自然具有更高的潜在熵，因此与动作维度成比例是合理的
+        负值：熵的负值意味着我们希望策略有一定的确定性，而不是完全随机
+        经验发现：这个简单的启发式方法在实践中效果良好，是 SAC 论文作者推荐的默认设置
+        '''
         self.target_entropy = -float(action_shape[0])
         # We optimize log(alpha) because alpha is always bigger than 0. 
         # todo 作用，设置为0.0
@@ -103,7 +112,7 @@ class SlacAlgorithm:
             feature = self.latent.encoder(state).view(1, -1)
         # 拿到每个观察对应的动作
         action = torch.tensor(ob.action, dtype=torch.float, device=self.device)
-        # 观察特征，动作
+        # 观察特征，动作 todo 增加shape查看
         feature_action = torch.cat([feature, action], dim=1)
         return feature_action
 
@@ -190,6 +199,7 @@ class SlacAlgorithm:
 
         self.update_critic(z, next_z, action, next_feature_action, reward, done, writer)
         self.update_actor(z, feature_action, writer)
+        # 将训练后的参数更新到目标网络
         soft_update(self.critic_target, self.critic, self.tau)
 
     def prepare_batch(self, state_, action_):
@@ -269,6 +279,8 @@ class SlacAlgorithm:
         # 同时log_pi是动作的对数概率（负的熵），它越小
         # -log_pi.detach().mean()时，这实际上是在计算策略的熵。越大的熵意味着策略越随机
         # 这里的loss_actor是最小化q值和最大化熵的组合
+        # 看定义时，这里self.alpha没有计算梯度，所以这里不会去更新self.alpha的梯度
+        # 这里主要是更新动作策略网络
         loss_actor = -torch.mean(torch.min(q1, q2) - self.alpha * log_pi)
 
         self.optim_actor.zero_grad()
@@ -276,7 +288,44 @@ class SlacAlgorithm:
         self.optim_actor.step()
 
         with torch.no_grad():
+            # 这里计算的熵就是上面的- self.alpha * log_pi只不过mean在外面
+            # entropy = -log_pi.detach().mean() 计算策略的当前熵值
             entropy = -log_pi.detach().mean()
+        # 计算温度参数的损失
+        # 这里不是算熵的损失，而是算温度参数的损失
+        # 这个损失函数的设计目的是自动调节 alpha，使策略的熵值接近目标熵值。
+        # self.alpha就是从self.log_alpha中计算出来的
+        '''
+        当 entropy < target_entropy（策略过于确定性）时：
+
+        target_entropy - entropy > 0
+        导致 loss_alpha < 0（因为有负号）
+        最小化 loss_alpha 会使 log_alpha 增加，从而使 alpha 增加
+        更高的 alpha 会在策略更新时更强调熵最大化，增加策略的随机性
+        当 entropy > target_entropy（策略过于随机）时：
+
+        target_entropy - entropy < 0
+        导致 loss_alpha > 0
+        最小化 loss_alpha 会使 log_alpha 减少，从而使 alpha 减少
+        较低的 alpha 会减弱熵的影响，让策略更专注于 Q 值最大化
+
+        entropy 与 target_entropy 靠近的影响
+        当 entropy 接近 target_entropy 时：
+
+        平衡探索和利用：
+
+        策略既不会过于确定性（可能陷入局部最优）
+        也不会过于随机（无法有效利用已学知识）
+        自适应调节：
+
+        alpha 会自动稳定在一个适当的值
+        在训练初期，alpha 通常较大，促进探索
+        随着学习进行，alpha 往往会减小，更加专注于利用
+        任务适应性：
+
+        不同任务所需的最优熵水平是不同的
+        自动调节使 SAC 能够适应各种不同复杂度的任务
+        '''
         loss_alpha = -self.log_alpha * (self.target_entropy - entropy)
 
         self.optim_alpha.zero_grad()

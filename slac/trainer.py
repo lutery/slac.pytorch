@@ -27,6 +27,10 @@ class SlacObservation:
     def reset_episode(self, state):
         '''
         传入环境观察
+
+        注意，这里的state长度只有num_sequences
+        但是在训练时，传入的state是num_sequences + 1 todo 找到为啥
+        反而动作是num_sequences - 1
         '''
 
         # 构建一个长度为num_sequences的队列
@@ -107,7 +111,7 @@ class Trainer:
         self.num_steps = num_steps # 代表要执行的步数（不包含action_repeat)
         self.initial_collection_steps = initial_collection_steps
         self.initial_learning_steps = initial_learning_steps
-        self.eval_interval = eval_interval
+        self.eval_interval = eval_interval # 评估间隔
         self.num_eval_episodes = num_eval_episodes
 
     def train(self):
@@ -177,13 +181,15 @@ class Trainer:
             t = self.algo.step(self.env, self.ob, t, False)
 
             # Update the algorithm.
-            # 每次执行一步后更新latent模型和sac模型
+            # 每次采样一步后更新latent模型和sac模型
             self.algo.update_latent(self.writer)
             self.algo.update_sac(self.writer)
 
             # Evaluate regularly.
+            # step_env 实际执行的步数，因为存在action_repeat，所以这里要乘以action_repeat
             step_env = step * self.action_repeat
             if step_env % self.eval_interval == 0:
+                # 验证模型
                 self.evaluate(step_env)
                 self.algo.save_model(os.path.join(self.model_dir, f"step{step_env}"))
 
@@ -193,6 +199,7 @@ class Trainer:
     def evaluate(self, step_env):
         mean_return = 0.0
 
+        # 需呀评估的生命数
         for i in range(self.num_eval_episodes):
             state = self.env_test.reset()
             self.ob_test.reset_episode(state)
@@ -200,6 +207,7 @@ class Trainer:
             done = False
 
             while not done:
+                # 直接使用预测的均质
                 action = self.algo.exploit(self.ob_test)
                 state, reward, done, _ = self.env_test.step(action)
                 self.ob_test.append(state, action)
@@ -207,6 +215,7 @@ class Trainer:
 
             mean_return += episode_return / self.num_eval_episodes
 
+        # 记录执行的步数和回报
         # Log to CSV.
         self.log["step"].append(step_env)
         self.log["return"].append(mean_return)

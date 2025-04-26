@@ -5,15 +5,19 @@ from torch import nn
 
 
 def create_feature_actions(feature_, action_):
-    N = feature_.size(0)
+    '''
+    feature shape: (N, num_sequences + 1, feature_dim)
+    action shape: (N, num_sequences, action_dim)
+    '''
+    N = feature_.size(0) # batch size
     # Flatten sequence of features.
-    f = feature_[:, :-1].view(N, -1)
-    n_f = feature_[:, 1:].view(N, -1)
+    f = feature_[:, :-1].view(N, -1) # 去掉最后一个序列 shape: (N, num_sequences * feature_dim)
+    n_f = feature_[:, 1:].view(N, -1) # 去掉第一个序列 shape: (N, num_sequences * feature_dim)
     # Flatten sequence of actions.
-    a = action_[:, :-1].view(N, -1)
-    n_a = action_[:, 1:].view(N, -1)
+    a = action_[:, :-1].view(N, -1) # 去掉最后一个动作 shape: (N, (num_sequences - 1) * action_dim)
+    n_a = action_[:, 1:].view(N, -1) # 去掉第一个动作 shape: (N, (num_sequences - 1) * action_dim)
     # Concatenate feature and action.
-    fa = torch.cat([f, a], dim=-1)
+    fa = torch.cat([f, a], dim=-1) # todo 为啥能拼接 调试看看 这里相当于
     n_fa = torch.cat([n_f, n_a], dim=-1)
     return fa, n_fa
 
@@ -109,6 +113,10 @@ def reparameterize(mean, log_std):
 
 
 def calculate_kl_divergence(p_mean, p_std, q_mean, q_std):
+    '''
+    计算先验分布和后验分布之间的KL散度
+    todo 查看这种方式的计算数学公式与之对应
+    '''
     var_ratio = (p_std / q_std).pow_(2)
     t1 = ((p_mean - q_mean) / q_std).pow_(2)
     return 0.5 * (var_ratio + t1 - 1 - var_ratio.log())

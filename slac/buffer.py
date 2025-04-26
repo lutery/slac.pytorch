@@ -163,7 +163,10 @@ class ReplayBuffer:
         对于第0维度来说是随机的，但是对于第1维度来说是连续的，采集batch_size个连续的环境观察
 
         return 
-        state_ shape (batch_size, num_sequences + 1, *state_shape)
+        state_ shape (batch_size, num_sequences + 1, *state_shape) todo 为啥这里会多一个1
+        action_ shape (batch_size, num_sequences, *action_shape)
+        reward_ shape (batch_size, num_sequences, 1)
+        done_ shape (batch_size, num_sequences, 1)
         """
         idxes = np.random.randint(low=0, high=self._n, size=batch_size)
         # 因为实际的state时LazyFrame，所以这里有点特殊处理
@@ -176,7 +179,15 @@ class ReplayBuffer:
     def sample_sac(self, batch_size):
         """
         Sample trajectories for updating SAC.
-        对于sac训练则再奖励和结束标识多返回一个维度，标识-1，因为在存储数据时
+        对于sac训练则再奖励和结束标识仅返回最后一个时刻的奖励和结束表示，todo 为啥
+
+        return 
+        state_ shape (batch_size, num_sequences + 1, *state_shape) t
+        action_ shape (batch_size, num_sequences, *action_shape)
+        reward_ shape (batch_size, 1)
+        done_ shape (batch_size, 1)
+        这里的reward和done是最后一个时刻的奖励和结束标识
+
         """
         idxes = np.random.randint(low=0, high=self._n, size=batch_size)
         state_ = np.empty((batch_size, self.num_sequences + 1, *self.state_shape), dtype=np.uint8)

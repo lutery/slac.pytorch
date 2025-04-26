@@ -69,8 +69,8 @@ class Trainer:
         algo, # 算法器
         log_dir, # 日志路径
         seed=0, # 随机种子
-        num_steps=3 * 10 ** 6, # 应该是训练的步数
-        initial_collection_steps=10 ** 4, # todo 这里的作用？
+        num_steps=3 * 10 ** 6, # 应该是训练的步数 实际使用时会除以action_repeat得到真实的步数
+        initial_collection_steps=10 ** 4, # 初始化缓冲区的训练步数
         initial_learning_steps=10 ** 5, # 初始化潜在空间的训练步数
         num_sequences=8, # todo 
         eval_interval=10 ** 4, # todo
@@ -104,7 +104,7 @@ class Trainer:
 
         # Other parameters.
         self.action_repeat = self.env.action_repeat
-        self.num_steps = num_steps
+        self.num_steps = num_steps # 代表要执行的步数（不包含action_repeat)
         self.initial_collection_steps = initial_collection_steps
         self.initial_learning_steps = initial_learning_steps
         self.eval_interval = eval_interval
@@ -170,10 +170,14 @@ class Trainer:
             self.algo.update_latent(self.writer)
 
         # Iterate collection, update and evaluation.
+        # 训练，初始轮数：self.initial_collection_steps + 1
+        # 结束轮数：self.num_steps // self.action_repeat + 1
+        # 这里的self.num_steps // self.action_repeat + 1 是因为每次执行动作都要乘以action_repeat
         for step in range(self.initial_collection_steps + 1, self.num_steps // self.action_repeat + 1):
             t = self.algo.step(self.env, self.ob, t, False)
 
             # Update the algorithm.
+            # 每次执行一步后更新latent模型和sac模型
             self.algo.update_latent(self.writer)
             self.algo.update_sac(self.writer)
 

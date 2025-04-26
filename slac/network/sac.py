@@ -62,6 +62,7 @@ class TwinnedQNetwork(torch.jit.ScriptModule):
         
         # 构建了两个net，输入的是动作和z1和z2的特征
         # 并进行了参数初始化
+        # 两个net分别预测两个q值
         self.net1 = build_mlp(
             input_dim=action_shape[0] + z1_dim + z2_dim,
             output_dim=1,

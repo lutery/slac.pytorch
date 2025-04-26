@@ -10,6 +10,10 @@ from slac.trainer import Trainer
 
 '''
 python train.py --domain_name cheetah --task_name run --action_repeat 4 --seed 0 --cuda
+
+根据latent的策略，应该是可以迁移到离散动作的
+todo 
+1. 尝试迁移到离散动作
 '''
 
 def main(args):
